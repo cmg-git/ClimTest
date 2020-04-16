@@ -1,3 +1,4 @@
 matplotlib
+jupyterlab-toc
 ipywidgets
 jupyter_contrib_nbextensions
