@@ -120,16 +120,11 @@ def AllOutAirCAV(tS=30, mi=2.18, tO=-1, phiO=1):
     wO = psy.w(tO, phiO)            # hum. out
 
     # Mass flow rate for design conditions
-    # Supplay air mass flow rate
-    # QsZ = UA*(tO - tIsp) + mi*c*(tO - tIsp)
-    # m = - QsZ/(c*(tS - tIsp)
-    # where
-    # tO, wO = -1, 3.5e-3           # outdoor
-    # tS = 30                       # supply air
-    # mi = 2.18                     # infiltration
-    QsZ = UA*(-1 - tIsp) + 2.18*c*(-1 - tIsp)
+    tOd = -1                        # outdoor design conditions
+    mid = 2.18                      # infiltration design
+    QsZ = UA*(tOd - tIsp) + mid*c*(tOd - tIsp)
     m = - QsZ/(c*(tS - tIsp))
-    print('All Out Air CAV')
+    print('Winter All_out_air CAV')
     print(f'm = {m: 5.3f} kg/s constant (from design conditions)')
     print('Design conditions tS = {tS: 3.1f} °C,'
           'mi = 2.18 kg/S, tO = -1°C, phi0 = 100%')
@@ -137,30 +132,33 @@ def AllOutAirCAV(tS=30, mi=2.18, tO=-1, phiO=1):
     # Model
     x = ModelAllOutAir(m, tS, mi, tO, phiO)
 
-    pd.options.display.float_format = '{:,.1f} °C'.format
-    t = pd.Series(x[:6:2], index=['tH', 'tS', 'tI'])
-    print('\nTemperature:')
-    print(t)
-
-    pd.options.display.float_format = '{:,.2f} g/kg'.format
-    w = pd.Series(x[1:6:2], index=['wH', 'wS', 'wI'])
-    print('\nHumidity ratio:')
-    print(1000*w)
-
-    pd.options.display.float_format = '{:,.0f} kW'.format
-    Q = pd.Series(x[6:], index=['QsS', 'QlL', 'QsZ', 'QlZ'])
-    print('\nHeat flow:')
-    print(Q/1000)
-
     # Processes on psychrometric chart
+    t = np.append(tO, x[0:5:2])
+    w = np.append(wO, x[1:6:2])
+
     A = np.array([[-1,  1,  0,  0],
                  [0,  -1,  1,  0],
                  [0,   0,  1, -1]])
-    t = np.append(tO, x[0:5:2])
-    t = np.append(t, 40)
 
-    w1 = np.append(wO, x[1:6:2])
-    psy.chartA(t, w1, A)
+    psy.chartA(t, w, A)
+
+    t = pd.Series(t)
+    w = 1000*pd.Series(w)
+    P = pd.concat([t, w], axis=1)       # points
+    P.columns = ['t [°C]', 'w [g/kg]']
+
+    output = P.to_string(formatters={
+        't [°C]': '{:,.2f}'.format,
+        'w [g/kg]': '{:,.2f}'.format
+    })
+    print()
+    print(output)
+
+    Q = pd.Series(x[6:], index=['QsHC', 'QlVH', 'QsTZ', 'QlTZ'])
+    # Q.columns = ['kW']
+    pd.options.display.float_format = '{:,.2f}'.format
+    print()
+    print(Q.to_frame().T/1000, 'kW')
 
     return None
 
@@ -210,33 +208,36 @@ def AllOutAirVAV(tSsp=30, mi=2.18, tO=-1, phiO=1):
         x = ModelAllOutAir(m, tSsp, mi, tO, phiO)
         tS = x[2]
         DtS = -(tSsp - tS)
-    print('All Out Air VAV')
+    print('Winter All_out_air VAV')
     print(f'm = {m: 5.3f} kg/s')
+   # Processes on psychrometric chart
+    t = np.append(tO, x[0:5:2])
+    w = np.append(wO, x[1:6:2])
 
-    pd.options.display.float_format = '{:,.1f} °C'.format
-    t = pd.Series(x[:6:2], index=['tH', 'tS', 'tI'])
-    print('\nTemperature:')
-    print(t)
-
-    pd.options.display.float_format = '{:,.2f} g/kg'.format
-    w = pd.Series(x[1:6:2], index=['wH', 'wS', 'wI'])
-    print('\nHumidity ratio:')
-    print(1000*w)
-
-    pd.options.display.float_format = '{:,.0f} kW'.format
-    Q = pd.Series(x[6:], index=['QsS', 'QlL', 'QsZ', 'QlZ'])
-    print('\nHeat flow:')
-    print(Q/1000)
-
-    # Processes on psychrometric chart
     A = np.array([[-1,  1,  0,  0],
                  [0,  -1,  1,  0],
                  [0,   0,  1, -1]])
-    t = np.append(tO, x[0:5:2])
-    t = np.append(t, 40)
-    print(f'wO = {wO:6.5f}')
-    w1 = np.append(wO, x[1:6:2])
-    psy.chartA(t, w1, A)
+
+    psy.chartA(t, w, A)
+
+    t = pd.Series(t)
+    w = 1000*pd.Series(w)
+    P = pd.concat([t, w], axis=1)       # points
+    P.columns = ['t [°C]', 'w [g/kg]']
+
+    output = P.to_string(formatters={
+        't [°C]': '{:,.2f}'.format,
+        'w [g/kg]': '{:,.2f}'.format
+    })
+    print()
+    print(output)
+
+    Q = pd.Series(x[6:], index=['QsHC', 'QlVH', 'QsTZ', 'QlTZ'])
+    # Q.columns = ['kW']
+    pd.options.display.float_format = '{:,.2f}'.format
+    print()
+    print(Q.to_frame().T/1000, 'kW')
+
     return None
 
 
@@ -355,7 +356,7 @@ def RecAirCAV(tS=30, mi=2.18, tO=-1, phiO=1, alpha=0.5):
     # mi = 2.18                     # infiltration
     QsZ = UA*(-1 - tIsp) + 2.18*c*(-1 - tIsp)
     m = - QsZ/(c*(tS - tIsp))
-    print('Rec Air CAV')
+    print('Winter Recirculated_air CAV')
     print(f'm = {m: 5.3f} kg/s constant (from design conditions)')
     print(f'Design conditions tS = {tS: 3.1f} °C,'
           'mi = 2.18 kg/S, tO = -1°C, phi0 = 100%')
@@ -369,26 +370,27 @@ def RecAirCAV(tS=30, mi=2.18, tO=-1, phiO=1, alpha=0.5):
                  [0,   0,  -1, 1,   0],
                  [0,   0,  0, -1,   1]])
     t = np.append(tO, x[0:8:2])
-    t = np.append(t, 40)
 
     print(f'wO = {wO:6.5f}')
-    w1 = np.append(wO, x[1:8:2])
-    psy.chartA(t, w1, A)
+    w = np.append(wO, x[1:8:2])
+    psy.chartA(t, w, A)
 
-    pd.options.display.float_format = '{:,.1f} °C'.format
-    t = pd.Series(x[:8:2], index=['tM', 'tH', 'tS', 'tI'])
-    print('\nTemperature:')
-    print(t)
+    t = pd.Series(t)
+    w = 1000*pd.Series(w)
+    P = pd.concat([t, w], axis=1)       # points
+    P.columns = ['t [°C]', 'w [g/kg]']
 
-    pd.options.display.float_format = '{:,.2f} g/kg'.format
-    w = pd.Series(x[1:8:2], index=['wM', 'wH', 'wS', 'wI'])
-    print('\nHumidity ratio:')
-    print(1000*w)
+    output = P.to_string(formatters={
+        't [°C]': '{:,.2f}'.format,
+        'w [g/kg]': '{:,.2f}'.format
+    })
+    print()
+    print(output)
 
-    pd.options.display.float_format = '{:,.0f} kW'.format
-    Q = pd.Series(x[8:], index=['QsS', 'QlL', 'QsZ', 'QlZ'])
-    print('\nHeat flow:')
-    print(Q/1000)
+    Q = pd.Series(x[8:], index=['QsHC', 'QlVH', 'QsTZ', 'QlTZ'])
+    pd.options.display.float_format = '{:,.2f}'.format
+    print()
+    print(Q.to_frame().T/1000, 'kW')
 
     return None
 
@@ -443,23 +445,8 @@ def RecAirVAV(tSsp=30, mi=2.18, tO=-1, phiO=1, alpha=0.5):
         tS = x[4]
         DtS = -(tSsp - tS)
 
-    print('Rec Air VAV')
+    print('Winter Rec_air VAV')
     print(f'm = {m: 5.3f} kg/s')
-
-    pd.options.display.float_format = '{:,.1f} °C'.format
-    t = pd.Series(x[:8:2], index=['tM', 'tH', 'tS', 'tI'])
-    print('\nTemperature:')
-    print(t)
-
-    pd.options.display.float_format = '{:,.2f} g/kg'.format
-    w = pd.Series(x[1:8:2], index=['wM', 'wH', 'wS', 'wI'])
-    print('\nHumidity ratio:')
-    print(1000*w)
-
-    pd.options.display.float_format = '{:,.0f} kW'.format
-    Q = pd.Series(x[8:], index=['QsS', 'QlL', 'QsZ', 'QlZ'])
-    print('\nHeat flow:')
-    print(Q/1000)
 
     # Processes on psychrometric chart
     A = np.array([[-1,  1,  0,  0, -1],
@@ -467,13 +454,32 @@ def RecAirVAV(tSsp=30, mi=2.18, tO=-1, phiO=1, alpha=0.5):
                  [0,   0,  -1, 1,   0],
                  [0,   0,  0, -1,   1]])
     t = np.append(tO, x[0:8:2])
-    t = np.append(t, 40)
+
     print(f'wO = {wO:6.5f}')
-    w1 = np.append(wO, x[1:8:2])
-    psy.chartA(t, w1, A)
+    w = np.append(wO, x[1:8:2])
+    psy.chartA(t, w, A)
+
+    t = pd.Series(t)
+    w = 1000*pd.Series(w)
+    P = pd.concat([t, w], axis=1)       # points
+    P.columns = ['t [°C]', 'w [g/kg]']
+
+    output = P.to_string(formatters={
+        't [°C]': '{:,.2f}'.format,
+        'w [g/kg]': '{:,.2f}'.format
+    })
+    print()
+    print(output)
+
+    Q = pd.Series(x[8:], index=['QsHC', 'QlVH', 'QsTZ', 'QlTZ'])
+    pd.options.display.float_format = '{:,.2f}'.format
+    print()
+    print(Q.to_frame().T/1000, 'kW')
+
     return None
 
 
+# Uncomment to test a function
 # AllOutAirCAV()
 # AllOutAirVAV()
 # RecAirCAV()

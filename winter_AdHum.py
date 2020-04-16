@@ -30,7 +30,7 @@ def ModelRecAir(m, tS, mi, tO, phiO, alpha, beta):
         CAV Constant Air Volume:
             mass flow rate calculated for design conditions
             maintained constant in all situations
-    
+
     INPUTS:
         m     mass flow of supply dry air
         tS    supply air;                30°C for design conditions
