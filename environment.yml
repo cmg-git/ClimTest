@@ -9,6 +9,8 @@ dependencies:
   - python
 
   - numpy
+  
+  - scipy
 
   - pip
 
@@ -21,3 +23,5 @@ dependencies:
     - pandas
 
     - matplotlib
+    
+    - scipy
