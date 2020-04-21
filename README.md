@@ -11,3 +11,6 @@ To experiment with the Notebook:
 > Kernel / Restart & Run All
 
 > Play with the widgets
+
+
+Access it on To share on https://mybinder.org/v2/gh/cmg-git/ClimTest/master
