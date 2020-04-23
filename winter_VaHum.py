@@ -1,18 +1,36 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
-Created on Mon Apr 13 11:22:02 2020
+Tue Apr 21 11:36:00 2020
+Heating and vapor humidification
+Two HVAC systems: all out air and recirculated air
 
-@author: cghiaus
+Building characterised by:
+    UA      global conductivity
+    mi      air infiltration mass flow
+    Qsa     auxiliary sensible loads
+    Qla     auxiliary latent loads
+Indoor conditions
+    tI      indoor temperature
+    phiI    indoor relative humidity
+Outdoor conditions
+    tO      outdoor temperature
+    phiO    outdoor relative humidity
+Constant air volume (CAV)
+    m       mass flow rate constant (cf. design conditions)
+    tS      supply air temperature variable
+Variable air volume (VAV)
+    tS      supply air temperature controlled
+    m       mass flow rate varable
+
+Inputs given in Jupyter Notebook
+
 """
 import numpy as np
 import pandas as pd
 import psychro as psy
 import matplotlib.pyplot as plt
 
-# global variables
-UA = 935.83                 # bldg conductance
-tIsp, wIsp = 18, 6.22e-3    # indoor conditions
+tOd = -1                    # outdoor design conditions
+mid = 2.18                  # infiltration design
 
 # constants
 c = 1e3                     # air specific heat J/kg K
@@ -23,7 +41,7 @@ l = 2496e3                  # latent heat J/kg
 # *****************************************
 
 
-def ModelAllOutAir(m, tS, mi, tO, phiO):
+def ModelAllOutAir(m, tS, tIsp, phiIsp, tO, phiO, Qsa, Qla, mi, UA):
     """
     Model:
         All outdoor air
@@ -31,11 +49,16 @@ def ModelAllOutAir(m, tS, mi, tO, phiO):
             mass flow rate given
             control of indoor condition (t2, w2)
     INPUTS:
-        m     mass flow of supply dry air
-        tS    supply air;                30°C for design conditions
-        mi    infiltration massflow rate 2.18 kg/s for design conditions
-        tO    outdoor temperature;       -1°C for design conditions
-        phiO  outdoor relative humidity; 100% for design conditions
+        m     mass flow of supply dry air kg/s
+        tS    supply air °C
+        tIsp  indoor air setpoint °C
+        phiIsp -
+        tO    outdoor temperature for design °C
+        phiO  outdoor relative humidity for design -
+        Qsa   aux. sensible heat W
+        Qla   aux. latente heat W
+        mi    infiltration massflow rate kg/s
+        UA    global conductivity bldg W/K
 
     OUTPUTS:
         x     vector 10 elements:
@@ -49,7 +72,10 @@ def ModelAllOutAir(m, tS, mi, tO, phiO):
         Kw:     Controller - humidity
         Kt:     Controller - temperature
         o:      outdoor conditions
-        0, 1, 2 unknown points (temperature, humidity ratio)
+    
+    10 Unknowns
+        0, 1, 2 points (temperature, humidity ratio)
+        QsHC, QlVH, QsTZ, QlTZ
 
     --o->HC--0->VH--1->TZ--2-->
          |       |     ||  |
@@ -57,37 +83,38 @@ def ModelAllOutAir(m, tS, mi, tO, phiO):
          |       |         |
          |       |<----Kw--|-w2
          |<------------Kt--|-t2
- 
     """
     Kt, Kw = 1e10, 1e10             # controller gain
-    wO = psy.w(tO, phiO)           # outdoor mumidity ratio
+    wO = psy.w(tO, phiO)            # outdoor mumidity ratio
+    wIsp = psy.w(tIsp, phiIsp)      # indoor mumidity ratio
 
     # Model
     A = np.zeros((10, 10))          # coefficents of unknowns
     b = np.zeros(10)                # vector of inputs
-
-    A[0, 0], A[0, 6],           b[0] = m*c,     -1,     m*c*tO      # S heater
+    # HC heating coil
+    A[0, 0], A[0, 6],           b[0] = m*c,     -1,     m*c*tO
     A[1, 1],                    b[1] = m*l,     m*l*wO
-
-    A[2, 0], A[2, 2],           b[2] = -m*c,    m*c,    0           # L humidif
+    # VA vapor humidifier
+    A[2, 0], A[2, 2],           b[2] = -m*c,    m*c,    0
     A[3, 1], A[3, 3], A[3, 7],  b[3] = -m*l,    m*l,    -1,     0
-
-    A[4, 2], A[4, 4], A[4, 8],  b[4] = -m*c,    m*c,    -1,     0   # Z zone
+    # TZ thermal zone
+    A[4, 2], A[4, 4], A[4, 8],  b[4] = -m*c,    m*c,    -1,     0
     A[5, 3], A[5, 5], A[5, 9],  b[5] = -m*l,    m*l,    -1,     0
-
-    A[6, 4], A[6, 8],           b[6] = UA+mi*c, 1,  (UA + mi*c)*tO  # Bldg
-    A[7, 5], A[7, 9],           b[7] = mi*l,    1,  mi*l*wO
-
-    A[8, 4], A[8, 8],           b[8] = Kt,      1,  Kt*tIsp         # Controler
-
-    A[9, 5], A[9, 9],           b[9] = Kw,      1,  Kw*wIsp         # Controler
+    # BL building
+    A[6, 4], A[6, 8],           b[6] = UA+mi*c, 1,  (UA + mi*c)*tO + Qsa
+    A[7, 5], A[7, 9],           b[7] = mi*l,    1,  mi*l*wO + Qla
+    # Kt indoor temperature controller
+    A[8, 4], A[8, 8],           b[8] = Kt,      1,  Kt*tIsp
+    # Kw indoor hum.ratio controller
+    A[9, 5], A[9, 9],           b[9] = Kw,      1,  Kw*wIsp
 
     # Solution
     x = np.linalg.solve(A, b)
     return x
 
 
-def AllOutAirCAV(tS=30, mi=2.18, tO=-1, phiO=1):
+def AllOutAirCAV(tS=30, tIsp=18, phiIsp=0.5, tO=-1, phiO=1,
+                 Qsa=0, Qla=0, mi=2.12, UA=935.83):
     """
     All out air
     CAV Constant Air Volume:
@@ -95,11 +122,17 @@ def AllOutAirCAV(tS=30, mi=2.18, tO=-1, phiO=1):
         maintained constant in all situations
 
     INPUTS:
-        tS    supply air;                30°C for design conditions
-        mi    infiltration massflow rate 2.18 kg/s for design conditions
-        tO    outdoor temperature;       -1°C for design conditions
-        phiO  outdoor relative humidity; 100% for design conditions
-        
+        m     mass flow of supply dry air kg/s
+        tS    supply air °C
+        tIsp  indoor air setpoint °C
+        phiIsp -
+        tO    outdoor temperature for design °C
+        phiO  outdoor relative humidity for design -
+        Qsa   aux. sensible heat W
+        Qla   aux. latente heat W
+        mi    infiltration massflow rate kg/s
+        UA    global conductivity bldg W/K
+
     System:
         HC:     Heating Coil
         VH:     Vapor Humidifier
@@ -108,9 +141,13 @@ def AllOutAirCAV(tS=30, mi=2.18, tO=-1, phiO=1):
         Kw:     Controller - humidity
         Kt:     Controller - temperature
         o:      outdoor conditions
-        0, 1, 2 unknown points (temperature, humidity ratio)
+
+    10 Unknowns
+        0, 1, 2 points (temperature, humidity ratio)
+        QsHC, QlVH, QsTZ, QlTZ
 
     --o->HC--0->VH--1->TZ--2-->
+         |       |     ||  |
          |       |     BL  |
          |       |         |
          |       |<----Kw--|-w2
@@ -120,22 +157,24 @@ def AllOutAirCAV(tS=30, mi=2.18, tO=-1, phiO=1):
     wO = psy.w(tO, phiO)            # hum. out
 
     # Mass flow rate for design conditions
-    tOd = -1                        # outdoor design conditions
-    mid = 2.18                      # infiltration design
+    # tOd = -1                        # outdoor design conditions
+    # mid = 2.18                      # infiltration design
     QsZ = UA*(tOd - tIsp) + mid*c*(tOd - tIsp)
     m = - QsZ/(c*(tS - tIsp))
     print('Winter All_out_air CAV')
     print(f'm = {m: 5.3f} kg/s constant (from design conditions)')
-    print('Design conditions tS = {tS: 3.1f} °C,'
-          'mi = 2.18 kg/S, tO = -1°C, phi0 = 100%')
+    print(f'Design conditions tS = {tS: 3.1f} °C,'
+          f'mi = {mid:3.1f} kg/s, tO = {tOd:3.1f} °C, '
+          f'tI = {tIsp:3.1f} °C')
 
     # Model
-    x = ModelAllOutAir(m, tS, mi, tO, phiO)
+    x = ModelAllOutAir(m, tS, tIsp, phiIsp, tO, phiO, Qsa, Qla, mi, UA)
 
     # Processes on psychrometric chart
     t = np.append(tO, x[0:5:2])
     w = np.append(wO, x[1:6:2])
 
+    # Adjancy matrix: rows=lines; columns=points
     A = np.array([[-1,  1,  0,  0],
                  [0,  -1,  1,  0],
                  [0,   0,  1, -1]])
@@ -160,20 +199,27 @@ def AllOutAirCAV(tS=30, mi=2.18, tO=-1, phiO=1):
     print()
     print(Q.to_frame().T/1000, 'kW')
 
-    return None
+    return x
 
 
-def AllOutAirVAV(tSsp=30, mi=2.18, tO=-1, phiO=1):
+def AllOutAirVAV(tSsp=30, tIsp=18, phiIsp=0.5, tO=-1, phiO=1,
+                 Qsa=0, Qla=0, mi=2.12, UA=935.83):
     """
     All out air
-    VAV Variablr Air Volume:
-        mass flow rate calculated to have ct. supply temp.
+    Heating & Vapor humidification
+    VAV Variable Air Volume:
+        mass flow rate calculated to have const. supply temp.
 
     INPUTS:
-        tS    supply air;                30°C for design conditions
-        mi    infiltration massflow rate 2.18 kg/s for design conditions
-        tO    outdoor temperature;       -1°C for design conditions
-        phiO  outdoor relative humidity; 100% for design conditions
+        tS    supply air °C
+        tIsp  indoor air setpoint °C
+        phiIsp -
+        tO    outdoor temperature for design °C
+        phiO  outdoor relative humidity for design -
+        Qsa   aux. sensible heat W
+        Qla   aux. latente heat W
+        mi    infiltration massflow rate kg/s
+        UA    global conductivity bldg W/K
 
     System:
         HC:     Heating Coil
@@ -183,7 +229,10 @@ def AllOutAirVAV(tSsp=30, mi=2.18, tO=-1, phiO=1):
         Kw:     Controller - humidity
         Kt:     Controller - temperature
         o:      outdoor conditions
-        0, 1, 2 unknown points (temperature, humidity ratio)
+
+    10 Unknowns
+        0, 1, 2 points (temperature, humidity ratio)
+        QsHC, QlVH, QsTZ, QlTZ
 
     --o->HC--0->VH--F-----1-->TZ--2-->
          |       |  |     |   BL  |
@@ -191,7 +240,7 @@ def AllOutAirVAV(tSsp=30, mi=2.18, tO=-1, phiO=1):
          |       |                |
          |       |<----Kw---------|-w2
          |<------------Kt---------|-t2
-        
+
         Mass-flow rate (VAV) I-controller:
         start with m = 0
         measure the supply temperature
@@ -205,12 +254,12 @@ def AllOutAirVAV(tSsp=30, mi=2.18, tO=-1, phiO=1):
     while DtS > 0.01:
         m = m + 0.01                # mass-flow rate I-controller
         # Model
-        x = ModelAllOutAir(m, tSsp, mi, tO, phiO)
+        x = ModelAllOutAir(m, tSsp, tIsp, phiIsp, tO, phiO, Qsa, Qla, mi, UA)
         tS = x[2]
         DtS = -(tSsp - tS)
     print('Winter All_out_air VAV')
     print(f'm = {m: 5.3f} kg/s')
-   # Processes on psychrometric chart
+    # Processes on psychrometric chart
     t = np.append(tO, x[0:5:2])
     w = np.append(wO, x[1:6:2])
 
@@ -246,7 +295,7 @@ def AllOutAirVAV(tSsp=30, mi=2.18, tO=-1, phiO=1):
 # *****************************************
 
 
-def ModelRecAir(m, tS, mi, tO, phiO, alpha):
+def ModelRecAir(m, alpha, tS, tIsp, phiIsp, tO, phiO, Qsa, Qla, mi, UA):
     """
     Model:
         Heating and vapor humidification
@@ -255,13 +304,18 @@ def ModelRecAir(m, tS, mi, tO, phiO, alpha):
             mass flow rate calculated for design conditions
             maintained constant in all situations
     INPUTS:
-        m     mass flow of supply dry air
-        tS    supply air;                30°C for design conditions
-        mi    infiltration massflow rate 2.18 kg/s for design conditions
-        tO    outdoor temperature;       -1°C for design conditions
-        phiO  outdoor relative humidity; 100% for design conditions
+        m     mass flow of supply dry air kg/s
         alpha mixing ratio of outdoor air
-  
+        tS    supply air °C
+        tIsp  indoor air setpoint °C
+        phiIsp -
+        tO    outdoor temperature for design °C
+        phiO  outdoor relative humidity for design -
+        Qsa   aux. sensible heat W
+        Qla   aux. latente heat W
+        mi    infiltration massflow rate kg/s
+        UA    global conductivity bldg W/K
+
     OUTPUTS:
         x     vector 12 elements:
             t0, w0, t1, w1, t2, w2, t3, w3, QsHC, QlVH, QsTZ, QlTZ
@@ -275,7 +329,10 @@ def ModelRecAir(m, tS, mi, tO, phiO, alpha):
         Kw:     Controller - humidity
         Kt:     Controller - temperature
         o:      outdoor conditions
-        0, 1, 2 unknown points (temperature, humidity ratio)
+
+    12 Unknowns
+        0, 1, 2, 3 points (temperature, humidity ratio)
+        QsHC, QlVH, QsTZ, QlTZ
 
     <-3--|<-------------------------|
          |                          |
@@ -288,45 +345,53 @@ def ModelRecAir(m, tS, mi, tO, phiO, alpha):
     """
     Kt, Kw = 1e10, 1e10             # controller gain
     wO = psy.w(tO, phiO)            # hum. out
+    wIsp = psy.w(tIsp, phiIsp)      # hum. in set point
 
     # Model
     A = np.zeros((12, 12))          # coefficents of unknowns
     b = np.zeros(12)                # vector of inputs
-
-    A[0, 0], A[0, 6], b[0] = m*c, -(1 - alpha)*m*c, alpha*m*c*tO    # MX
+    # MX mixing box
+    A[0, 0], A[0, 6], b[0] = m*c, -(1 - alpha)*m*c, alpha*m*c*tO
     A[1, 1], A[1, 7], b[1] = m*l, -(1 - alpha)*m*l, alpha*m*l*wO
-
-    A[2, 0], A[2, 2], A[2, 8], b[2] = m*c, -m*c, 1, 0               # HC
+    # HC hearing coil
+    A[2, 0], A[2, 2], A[2, 8], b[2] = m*c, -m*c, 1, 0
     A[3, 1], A[3, 3], b[3] = m*l, -m*l, 0
-
-    A[4, 2], A[4, 4], b[4] = m*c, -m*c, 0                           # VH
+    # VH vapor humidifier
+    A[4, 2], A[4, 4], b[4] = m*c, -m*c, 0
     A[5, 3], A[5, 5], A[5, 9], b[5] = m*l, -m*l, 1, 0
-
-    A[6, 4], A[6, 6], A[6, 10], b[6] = m*c, -m*c, 1, 0              # TZ
+    # TZ thermal zone
+    A[6, 4], A[6, 6], A[6, 10], b[6] = m*c, -m*c, 1, 0
     A[7, 5], A[7, 7], A[7, 11], b[7] = m*l, -m*l, 1, 0
-
-    A[8, 6], A[8, 10], b[8] = (UA + mi*c), 1, (UA + mi*c)*tO        # BL
-    A[9, 7], A[9, 11], b[9] = mi*l, 1, mi*l*wO
-
-    A[10, 6], A[10, 8], b[10] = Kt, 1, Kt*tIsp                      # Kt
-    A[11, 7], A[11, 9], b[11] = Kw, 1, Kw*wIsp                      # Kw
+    # BL building
+    A[8, 6], A[8, 10], b[8] = (UA + mi*c), 1, (UA + mi*c)*tO + Qsa
+    A[9, 7], A[9, 11], b[9] = mi*l, 1, mi*l*wO + Qla
+    # Kt indoor temperature controller
+    A[10, 6], A[10, 8], b[10] = Kt, 1, Kt*tIsp
+    # Kw indoor humidity controller 
+    A[11, 7], A[11, 9], b[11] = Kw, 1, Kw*wIsp
 
     # Solution
     x = np.linalg.solve(A, b)
     return x
 
 
-def RecAirCAV(tS=30, mi=2.18, tO=-1, phiO=1, alpha=0.5):
+def RecAirCAV(alpha=0.5, tS=30, tIsp=18, phiIsp=0.5, tO=-1, phiO=1,
+              Qsa=0, Qla=0, mi=2.12, UA=935.83):
     """
     CAV Constant Air Volume:
     mass flow rate calculated for design conditions
     maintained constant in all situations
     INPUTS:
-    tS    supply air;                30°C for design conditions
-    mi    infiltration massflow rate 2.18 kg/s for design conditions
-    tO    outdoor temperature;       -1°C for design conditions
-    phiO  outdoor relative humidity; 100% for design conditions
-    alpha mixing ratio of outdoor air
+        alpha mixing ratio of outdoor air
+        tS    supply air °C
+        tIsp  indoor air setpoint °C
+        phiIsp -
+        tO    outdoor temperature for design °C
+        phiO  outdoor relative humidity for design -
+        Qsa   aux. sensible heat W
+        Qla   aux. latente heat W
+        mi    infiltration massflow rate kg/s
+        UA    global conductivity bldg W/K
 
     System:
         HC:     Heating Coil
@@ -335,11 +400,17 @@ def RecAirCAV(tS=30, mi=2.18, tO=-1, phiO=1, alpha=0.5):
         Kw:     Controller - humidity
         Kt:     Controller - temperature
         o:      outdoor conditions
-        0, 1, 2 unknown points (temperature, humidity ratio)
+
+    12 Unknowns
+        0, 1, 2, 3 points (temperature, humidity ratio)
+        QsHC, QlVH, QsTZ, QlTZ
 
     <-3--|<-------------------------|
          |                          |
     -o->MX--0->HC--1->VH--2->TZ--3-->
+               |       |     ||  |
+               |       |     BL  |
+               |       |         |
                |       |_____Kw__|_w3
                |_____________Kt__|_t3
     """
@@ -351,18 +422,20 @@ def RecAirCAV(tS=30, mi=2.18, tO=-1, phiO=1, alpha=0.5):
     # QsZ = UA*(tO - tIsp) + mi*c*(tO - tIsp)
     # m = - QsZ/(c*(tS - tIsp)
     # where
-    # tO, wO = -1, 3.5e-3           # outdoor
+    # tOd, wOd = -1, 3.5e-3           # outdoor
     # tS = 30                       # supply air
-    # mi = 2.18                     # infiltration
-    QsZ = UA*(-1 - tIsp) + 2.18*c*(-1 - tIsp)
+    # mid = 2.18                     # infiltration
+    QsZ = UA*(tOd - tIsp) + mid*c*(-1 - tIsp)
     m = - QsZ/(c*(tS - tIsp))
     print('Winter Recirculated_air CAV')
     print(f'm = {m: 5.3f} kg/s constant (from design conditions)')
     print(f'Design conditions tS = {tS: 3.1f} °C,'
-          'mi = 2.18 kg/S, tO = -1°C, phi0 = 100%')
+          f'mi = {mid:3.1f} kg/s, tO = {tOd:3.1f} °C, '
+          f'tI = {tIsp:3.1f} °C')
 
     # Model
-    x = ModelRecAir(m, tS, mi, tO, phiO, alpha)
+    x = ModelRecAir(m, alpha, tS, tIsp, phiIsp, tO, phiO, Qsa, Qla, mi, UA)
+    # (m, tS, mi, tO, phiO, alpha)
 
     # Processes on psychrometric chart
     A = np.array([[-1,  1,  0,  0, -1],
@@ -395,18 +468,25 @@ def RecAirCAV(tS=30, mi=2.18, tO=-1, phiO=1, alpha=0.5):
     return None
 
 
-def RecAirVAV(tSsp=30, mi=2.18, tO=-1, phiO=1, alpha=0.5):
+def RecAirVAV(alpha=0.5, tSsp=30, tIsp=18, phiIsp=0.5, tO=-1, phiO=1,
+              Qsa=0, Qla=0, mi=2.12, UA=935.83):
     """
     CAV Variable Air Volume:
     mass flow rate calculated s.t.
     he supply temp. is maintained constant in all situations
     INPUTS:
-    tS    supply air;                30°C for design conditions
-    mi    infiltration massflow rate 2.18 kg/s for design conditions
-    tO    outdoor temperature;       -1°C for design conditions
-    phiO  outdoor relative humidity; 100% for design conditions
-    alpha ratio of out air: alpha = 1 -> All out air;
-                            alpha = 0 -> All recirculated air
+    INPUTS:
+        m     mass flow of supply dry air kg/s
+        alpha mixing ratio of outdoor air
+        tS    supply air °C
+        tIsp  indoor air setpoint °C
+        phiIsp -
+        tO    outdoor temperature for design °C
+        phiO  outdoor relative humidity for design -
+        Qsa   aux. sensible heat W
+        Qla   aux. latente heat W
+        mi    infiltration massflow rate kg/s
+        UA    global conductivity bldg W/K
 
     System (CAV & m introduced by the Fan is cotrolled by tS )
         HC:     Heating Coil
@@ -416,11 +496,16 @@ def RecAirVAV(tSsp=30, mi=2.18, tO=-1, phiO=1, alpha=0.5):
         Kw:     Controller - humidity
         Kt:     Controller - temperature
         o:      outdoor conditions
-        0, 1, 2, 3 unknown points (temperature, humidity ratio)
+
+    12 Unknowns
+        0, 1, 2, 3 points (temperature, humidity ratio)
+        QsHC, QlVH, QsTZ, QlTZ
 
     <----|<--------------------------------|
          |                                 |
     -o->MX--0->HC--1->VH--F-----2-->TZ--3-->
+               |       |  |     |   ||  |
+               |       |  |     |   BL  |
                |       |  |     |       |
                |       |  |_Kt2_|_t2    |
                |       |                |
@@ -441,7 +526,8 @@ def RecAirVAV(tSsp=30, mi=2.18, tO=-1, phiO=1, alpha=0.5):
         m = m + 0.01
 
         # Model
-        x = ModelRecAir(m, tSsp, mi, tO, phiO, alpha)
+        x = ModelRecAir(m, alpha, tSsp, tIsp, phiIsp, tO, phiO,
+                        Qsa, Qla, mi, UA)
         tS = x[4]
         DtS = -(tSsp - tS)
 

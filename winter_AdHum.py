@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
+Refactored Wed Apr 23 13:20:00 2020
 Created on Mon Apr 13 14:56:35 2020
 
 @author: cghiaus
@@ -11,18 +12,21 @@ import psychro as psy
 import matplotlib.pyplot as plt
 
 # global variables
-UA = 935.83                 # bldg conductance
-tIsp, wIsp = 18, 6.22e-3    # indoor conditions
+# UA = 935.83                 # bldg conductance
+# tIsp, wIsp = 18, 6.22e-3    # indoor conditions
+
+tOd = -1                    # outdoor design conditions
+mid = 2.18                  # infiltration design
 
 # constants
 c = 1e3                     # air specific heat J/kg K
 l = 2496e3                  # latent heat J/kg
 
-    
+ 
 # *****************************************
 # RECYCLED AIR
 # *****************************************
-def ModelRecAir(m, tS, mi, tO, phiO, alpha, beta):
+def ModelRecAir(m, alpha, beta, tS, tIsp, phiIsp, tO, phiO, Qsa, Qla, mi, UA):
     """
     Model:
         Heating and adiabatic humidification
@@ -32,13 +36,18 @@ def ModelRecAir(m, tS, mi, tO, phiO, alpha, beta):
             maintained constant in all situations
 
     INPUTS:
-        m     mass flow of supply dry air
-        tS    supply air;                30°C for design conditions
-        mi    infiltration massflow rate 2.18 kg/s for design conditions
-        tO    outdoor temperature;       -1°C for design conditions
-        phiO  outdoor relative humidity; 100% for design conditions
-        alpha mixing ratio of outdoor air
-        beta  by-pass factor of adiab. hum.
+        m       mass flow of supply dry air, kg/s
+        alpha   mixing ratio of outdoor air, -
+        beta    by-pass factor of the adiabatic humidifier, -
+        tS      supply air, °C
+        tIsp    indoor air setpoint, °C
+        phiIsp  indoor relative humidity set point, -
+        tO      outdoor temperature for design, °C
+        phiO    outdoor relative humidity for design, -
+        Qsa     aux. sensible heat, W
+        Qla     aux. latente heat, W
+        mi      infiltration massflow rate, kg/s
+        UA      global conductivity bldg, W/K
 
     System:
         MX1:    Mixing box
@@ -73,6 +82,7 @@ def ModelRecAir(m, tS, mi, tO, phiO, alpha, beta):
     """
     Kt, Kw = 1e10, 1e10             # controller gain
     wO = psy.w(tO, phiO)            # hum. out
+    wIsp = psy.w(tIsp, phiIsp)      # indoor mumidity ratio
 
     # Model
     ts0, Del_ts = tS, 2             # initial guess saturation temp.
@@ -100,8 +110,8 @@ def ModelRecAir(m, tS, mi, tO, phiO, alpha, beta):
         A[10, 8], A[10, 10], A[10, 14], b[10] = m*c, -m*c, 1, 0
         A[11, 9], A[11, 11], A[11, 15], b[11] = m*l, -m*l, 1, 0
         # BL
-        A[12, 10], A[12, 14], b[12] = (UA+mi*c), 1, (UA+mi*c)*tO
-        A[13, 11], A[13, 15], b[13] = mi*l, 1, mi*l*wO
+        A[12, 10], A[12, 14], b[12] = (UA+mi*c), 1, (UA+mi*c)*tO + Qsa
+        A[13, 11], A[13, 15], b[13] = mi*l, 1, mi*l*wO + Qla
         # Kt & Kw
         A[14, 10], A[14, 12], b[14] = Kt, 1, Kt*tIsp
         A[15, 11], A[15, 13], b[15] = Kw, 1, Kw*wIsp
@@ -112,7 +122,9 @@ def ModelRecAir(m, tS, mi, tO, phiO, alpha, beta):
     return x
 
 
-def RecAirCAV(tS=30, mi=2.18, tO=-1, phiO=1, alpha=1, beta=0.1):
+def RecAirCAV(alpha=1, beta=0.1,
+              tS=30, tIsp=18, phiIsp=0.49, tO=-1, phiO=1,
+              Qsa=0, Qla=0, mi=2.18, UA=935.83):
     """
     Model:
         Heating and adiabatic humidification
@@ -122,12 +134,17 @@ def RecAirCAV(tS=30, mi=2.18, tO=-1, phiO=1, alpha=1, beta=0.1):
             maintained constant in all situations
 
     INPUTS:
-        tS    supply air;                30°C for design conditions
-        mi    infiltration massflow rate 2.18 kg/s for design conditions
-        tO    outdoor temperature;       -1°C for design conditions
-        phiO  outdoor relative humidity; 100% for design conditions
-        alpha mixing ratio of outdoor air
-        beta  by-pass factor of adiab. hum.
+        alpha   mixing ratio of outdoor air, -
+        beta    by-pass factor of the adiabatic humidifier, -
+        tS      supply air, °C
+        tIsp    indoor air setpoint, °C
+        phiIsp  indoor relative humidity set point, -
+        tO      outdoor temperature for design, °C
+        phiO    outdoor relative humidity for design, -
+        Qsa     aux. sensible heat, W
+        Qla     aux. latente heat, W
+        mi      infiltration massflow rate, kg/s
+        UA      global conductivity bldg, W/K
 
     System:
         MX1:    Mixing box
@@ -140,7 +157,7 @@ def RecAirCAV(tS=30, mi=2.18, tO=-1, phiO=1, alpha=1, beta=0.1):
         Kw:     Controller - humidity
         Kt:     Controller - temperature
         o:      outdoor conditions
-        0..5    unknown points (temperature, humidity ratio)
+        0..5    6 unknown points (temperature, humidity ratio)
 
         <----|<-------------------------------------------|
              |                                            |
@@ -152,7 +169,9 @@ def RecAirCAV(tS=30, mi=2.18, tO=-1, phiO=1, alpha=1, beta=0.1):
                     |                        |<-----Kt----|<-t5
                     |<------------------------------Kw----|<-w5
 
-
+    16 Unknowns
+        0..5: 2*6 points (temperature, humidity ratio)
+        QsHC1, QsHC2, QsTZ, QlTZ
     Returns
     -------
     None
@@ -167,14 +186,15 @@ def RecAirCAV(tS=30, mi=2.18, tO=-1, phiO=1, alpha=1, beta=0.1):
     # where
     # tO, wO = -1, 3.5e-3           # outdoor
     # tS = 30                       # supply air
-    # mi = 2.18                     # infiltration
-    QsZ = UA*(-1 - tIsp) + 2.18*c*(-1 - tIsp)
+    # mid = 2.18                     # infiltration
+    QsZ = UA*(tOd - tIsp) + mid*c*(tOd - tIsp)
     m = - QsZ/(c*(tS - tIsp))
     print(f'm = {m: 5.3f} kg/s constant for design conditions:')
     print(f'    [tSd = {tS: 3.1f} °C, mi = 2.18 kg/S, tO = -1°C, phi0 = 100%]')
 
     # Model
-    x = ModelRecAir(m, tS, mi, tO, phiO, alpha, beta)
+    x = ModelRecAir(m, alpha, beta,
+                    tS, tIsp, phiIsp, tO, phiO, Qsa, Qla, mi, UA)
 
     t = np.append(tO, x[0:12:2])
     w = np.append(wO, x[1:12:2])
@@ -209,20 +229,28 @@ def RecAirCAV(tS=30, mi=2.18, tO=-1, phiO=1, alpha=1, beta=0.1):
     return None
 
 
-def RecAirVAV(tSsp=30, mi=2.18, tO=-1, phiO=1, alpha=0.5, beta=0):
+def RecAirVAV(alpha=1, beta=0.1,
+              tSsp=30, tIsp=18, phiIsp=0.49, tO=-1, phiO=1,
+              Qsa=0, Qla=0, mi=2.18, UA=935.83):
     """
     Created on Fri Apr 10 13:57:22 2020
-    CAV Recirculated air Heating & Adiabatic Humidification
-    mass flow rate calculated for design conditions
-    maintained constant in all situations
+    Heating & Adiabatic humidification & Re-heating
+    Recirculated air
+    VAV Variable Air Volume:
+        mass flow rate calculated to have const. supply temp.
 
     INPUTS:
-    tS    supply air;                30°C for design conditions
-    mi    infiltration massflow rate 2.18 kg/s for design conditions
-    tO    outdoor temperature;       -1°C for design conditions
-    phiO  outdoor relative humidity; 100% for design conditions
-    alpha mixing ratio of outdoor air
-    beta  by-pass factor of adiab. hum.
+        alpha   mixing ratio of outdoor air, -
+        beta    by-pass factor of the adiabatic humidifier, -
+        tS      supply air, °C
+        tIsp    indoor air setpoint, °C
+        phiIsp  indoor relative humidity set point, -
+        tO      outdoor temperature for design, °C
+        phiO    outdoor relative humidity for design, -
+        Qsa     aux. sensible heat, W
+        Qla     aux. latente heat, W
+        mi      infiltration massflow rate, kg/s
+        UA      global conductivity bldg, W/K
 
     System:
         MX1:    Mixing box
@@ -247,6 +275,9 @@ def RecAirVAV(tSsp=30, mi=2.18, tO=-1, phiO=1, alpha=0.5, beta=0):
                     |                        |<-----Kt----------|<-t5
                     |<------------------------------Kw----------|<-w5
 
+    16 Unknowns
+        0..5: 2*6 points (temperature, humidity ratio)
+        QsHC1, QsHC2, QsTZ, QlTZ
     """
     from scipy.optimize import least_squares
 
@@ -262,7 +293,8 @@ def RecAirVAV(tSsp=30, mi=2.18, tO=-1, phiO=1, alpha=0.5, beta=0):
             tS - tSsp: difference between supply temp. and its set point
 
         """
-        x = ModelRecAir(m, tSsp, mi, tO, phiO, alpha, beta)
+        x = ModelRecAir(m, alpha, beta,
+                        tSsp, tIsp, phiIsp, tO, phiO, Qsa, Qla, mi, UA)
         tS = x[8]
         return (tS - tSsp)
 
@@ -277,7 +309,8 @@ def RecAirVAV(tSsp=30, mi=2.18, tO=-1, phiO=1, alpha=0.5, beta=0):
         print('RecAirVAV: No solution for m')
 
     print(f'm = {m: 5.3f} kg/s')
-    x = ModelRecAir(m, tSsp, mi, tO, phiO, alpha, beta)
+    x = ModelRecAir(m, alpha, beta,
+                    tSsp, tIsp, phiIsp, tO, phiO, Qsa, Qla, mi, UA)
 
     # DtS, m = 2, 1                   # initial temp; diff; flow rate
     # while DtS > 0.01:
@@ -316,7 +349,7 @@ def RecAirVAV(tSsp=30, mi=2.18, tO=-1, phiO=1, alpha=0.5, beta=0):
     pd.options.display.float_format = '{:,.2f}'.format
     print()
     print(Q.to_frame().T/1000, 'kW')
-  
+
     return None
 
 

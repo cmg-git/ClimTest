@@ -12,5 +12,3 @@ To experiment with the Notebook:
 
 > Play with the widgets
 
-
-Access it on To share on https://mybinder.org/v2/gh/cmg-git/ClimTest/master
