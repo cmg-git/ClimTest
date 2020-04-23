@@ -12,4 +12,3 @@ To experiment with the Notebook:
 2. Kernel / Restart & Run All
 
 3. Play with the widgets
-
