@@ -175,9 +175,10 @@ def AllOutAirCAV(tS=30, tIsp=18, phiIsp=0.5, tO=-1, phiO=1,
     w = np.append(wO, x[1:6:2])
 
     # Adjancy matrix: rows=lines; columns=points
-    A = np.array([[-1,  1,  0,  0],
-                 [0,  -1,  1,  0],
-                 [0,   0,  1, -1]])
+    # Points       O    0   1   2       Elements
+    A = np.array([[-1,  1,  0,  0],     # HC
+                 [0,  -1,  1,  0],      # VH
+                 [0,   0,  1, -1]])     # TZ
 
     psy.chartA(t, w, A)
 
@@ -262,10 +263,10 @@ def AllOutAirVAV(tSsp=30, tIsp=18, phiIsp=0.5, tO=-1, phiO=1,
     # Processes on psychrometric chart
     t = np.append(tO, x[0:5:2])
     w = np.append(wO, x[1:6:2])
-
-    A = np.array([[-1,  1,  0,  0],
-                 [0,  -1,  1,  0],
-                 [0,   0,  1, -1]])
+    # Points       o    0   1   2       Elements
+    A = np.array([[-1,  1,  0,  0],     # HC
+                 [0,  -1,  1,  0],      # VH
+                 [0,   0,  1, -1]])     # TZ
 
     psy.chartA(t, w, A)
 
@@ -367,7 +368,7 @@ def ModelRecAir(m, alpha, tS, tIsp, phiIsp, tO, phiO, Qsa, Qla, mi, UA):
     A[9, 7], A[9, 11], b[9] = mi*l, 1, mi*l*wO + Qla
     # Kt indoor temperature controller
     A[10, 6], A[10, 8], b[10] = Kt, 1, Kt*tIsp
-    # Kw indoor humidity controller 
+    # Kw indoor humidity controller
     A[11, 7], A[11, 9], b[11] = Kw, 1, Kw*wIsp
 
     # Solution
@@ -438,10 +439,11 @@ def RecAirCAV(alpha=0.5, tS=30, tIsp=18, phiIsp=0.5, tO=-1, phiO=1,
     # (m, tS, mi, tO, phiO, alpha)
 
     # Processes on psychrometric chart
-    A = np.array([[-1,  1,  0,  0, -1],
-                 [0,  -1,  1,  0,   0],
-                 [0,   0,  -1, 1,   0],
-                 [0,   0,  0, -1,   1]])
+    # Points      o    0    1   2   3       Elements
+    A = np.array([[-1,  1,  0,  0, -1],     # MX
+                 [0,  -1,  1,  0,   0],     # HC
+                 [0,   0,  -1, 1,   0],     # VH
+                 [0,   0,  0, -1,   1]])    # TZ
     t = np.append(tO, x[0:8:2])
 
     print(f'wO = {wO:6.5f}')
@@ -535,19 +537,19 @@ def RecAirVAV(alpha=0.5, tSsp=30, tIsp=18, phiIsp=0.5, tO=-1, phiO=1,
     print(f'm = {m: 5.3f} kg/s')
 
     # Processes on psychrometric chart
-    A = np.array([[-1,  1,  0,  0, -1],
-                 [0,  -1,  1,  0,   0],
-                 [0,   0,  -1, 1,   0],
-                 [0,   0,  0, -1,   1]])
+    # Points      o    0    1   2   3       Elements
+    A = np.array([[-1,  1,  0,  0, -1],     # MX
+                 [0,  -1,  1,  0,   0],     # HC
+                 [0,   0,  -1, 1,   0],     # VH
+                 [0,   0,  0, -1,   1]])    # TZ
     t = np.append(tO, x[0:8:2])
-
     print(f'wO = {wO:6.5f}')
     w = np.append(wO, x[1:8:2])
     psy.chartA(t, w, A)
 
     t = pd.Series(t)
     w = 1000*pd.Series(w)
-    P = pd.concat([t, w], axis=1)       # points
+    P = pd.concat([t, w], axis=1)           # points
     P.columns = ['t [°C]', 'w [g/kg]']
 
     output = P.to_string(formatters={
