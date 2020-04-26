@@ -147,7 +147,7 @@ def AllOutAirCAV(tS=30, tIsp=18, phiIsp=0.5, tO=-1, phiO=1,
         QsHC, QlVH, QsTZ, QlTZ
 
     --o->HC--0->VH--1->TZ--2-->
-         |       |     ||  |
+         /       /     ||  |
          |       |     BL  |
          |       |         |
          |       |<----Kw--|-w2
@@ -236,6 +236,7 @@ def AllOutAirVAV(tSsp=30, tIsp=18, phiIsp=0.5, tO=-1, phiO=1,
         QsHC, QlVH, QsTZ, QlTZ
 
     --o->HC--0->VH--F-----1-->TZ--2-->
+         /       /  |     |   ||  |
          |       |  |     |   BL  |
          |       |  |_Kt1_|       |
          |       |                |
@@ -338,7 +339,7 @@ def ModelRecAir(m, alpha, tS, tIsp, phiIsp, tO, phiO, Qsa, Qla, mi, UA):
     <-3--|<-------------------------|
          |                          |
     -o->MX--0->HC--1->VH--2->TZ--3-->
-               |       |     ||  |
+               /       /     ||  |
                |       |     BL  |
                |       |         |
                |       |<----Kw--|-w3
@@ -409,7 +410,7 @@ def RecAirCAV(alpha=0.5, tS=30, tIsp=18, phiIsp=0.5, tO=-1, phiO=1,
     <-3--|<-------------------------|
          |                          |
     -o->MX--0->HC--1->VH--2->TZ--3-->
-               |       |     ||  |
+               /       /     ||  |
                |       |     BL  |
                |       |         |
                |       |_____Kw__|_w3
@@ -506,7 +507,7 @@ def RecAirVAV(alpha=0.5, tSsp=30, tIsp=18, phiIsp=0.5, tO=-1, phiO=1,
     <----|<--------------------------------|
          |                                 |
     -o->MX--0->HC--1->VH--F-----2-->TZ--3-->
-               |       |  |     |   ||  |
+               /       /  |     |   ||  |
                |       |  |     |   BL  |
                |       |  |     |       |
                |       |  |_Kt2_|_t2    |

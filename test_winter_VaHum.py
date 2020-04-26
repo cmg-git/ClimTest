@@ -14,7 +14,7 @@ import numpy as np
 def test_vhModelAllOutAir():
     """
     --o->HC--0->VH--1->TZ--2-->
-         |       |     ||  |
+         /       /     ||  |
          |       |     BL  |
          |       |         |
          |       |<----Kw--|-w2
@@ -41,7 +41,7 @@ def test_vhModelAllOutAir():
 def test_vhAllOutAirCAV():
     """
     --o->HC--0->VH--1->TZ--2-->
-         |       |     ||  |
+         /       /     ||  |
          |       |     BL  |
          |       |         |
          |       |<----Kw--|-w2
@@ -64,7 +64,7 @@ def test_vhModelRecAir():
     <-3--|<-------------------------|
          |                          |
     -o->MX--0->HC--1->VH--2->TZ--3-->
-               |       |     ||  |
+               /       /     ||  |
                |       |     BL  |
                |       |         |
                |       |<----Kw--|-w3

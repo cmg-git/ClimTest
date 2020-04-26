@@ -66,7 +66,7 @@ def ModelRecAir(m, alpha, beta, tS, tIsp, phiIsp, tO, phiO, Qsa, Qla, mi, UA):
              |                                            |
              |              |-------|                     |
         -o->MX1--0->HC1--1->|       MX2--3->HC2--4->TZ--5-|
-                    |       |       |        |      ||    |
+                    /       |       |        /      ||    |
                     |       |->AH-2-|        |      BL    |
                     |                        |            |
                     |                        |<-----Kt----|<-t5
