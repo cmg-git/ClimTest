@@ -4,21 +4,16 @@ channels:
   - conda-forge
 
 dependencies:
-  - python=3.8.8=h88f2d9e_5
-  - numpy=1.19.2=py38h456fd55_0
-  - scipy=1.6.2=py38h2515648_0
-  - matplotlib=3.3.4=py38hecd8cb5_0
-  - matplotlib-base=3.3.4=py38h8b3ea08_0
-  - pandas=1.2.4=py38h23ab428_0
-  - pip=21.0.1=py38hecd8cb5_0
+  - python
+  - numpy
+  - scipy
+  - matplotlib
+  - pandas
+  - pip
 
   - pip:
     - nbgitpuller
-
     - sphinx-gallery
-
     - pandas
-
     - matplotlib
-    
     - scipy
